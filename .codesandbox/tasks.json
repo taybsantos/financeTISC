@@ -1,0 +1,13 @@
+{
+  "setupTasks": [
+    "mkdir -p /project/sandbox/user-workspace",
+    "cd /opt/vscodium && ./bin/code-server --install-extension /project/sandbox/.devcontainer/blackboxagent.vsix"
+  ],
+  "tasks": {
+    "start-vscode": {
+      "name": "Start VSCode",
+      "command": "cd /opt/vscodium && ./bin/code-server --port 1025 --without-connection-token --accept-server-license-terms --host 0.0.0.0",
+      "runAtStart": true
+    }
+  }
+}
