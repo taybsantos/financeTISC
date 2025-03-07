@@ -1,4 +1,16 @@
-from .user import User, Category
-from .transaction import Transaction, TransactionType, TransactionStatus
+from .user import User
+from .transaction import Transaction
+from .asset import Asset, AssetType, AssetStatus
+from .debt import Debt, DebtType, DebtStatus, PaymentFrequency
 
-__all__ = ['User', 'Category', 'Transaction', 'TransactionType', 'TransactionStatus']
+__all__ = [
+    'User',
+    'Transaction',
+    'Asset',
+    'AssetType',
+    'AssetStatus',
+    'Debt',
+    'DebtType',
+    'DebtStatus',
+    'PaymentFrequency'
+]
