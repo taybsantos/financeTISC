@@ -1,0 +1,184 @@
+Metadata-Version: 2.2
+Name: financiaai
+Version: 1.0.0
+Summary: AI-powered personal finance management platform
+Home-page: https://github.com/financiaai/financiaai
+Author: FinanciaAI Team
+Author-email: team@financiaai.com
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: End Users/Desktop
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.68.0
+Requires-Dist: uvicorn>=0.15.0
+Requires-Dist: sqlalchemy>=1.4.23
+Requires-Dist: psycopg2-binary>=2.9.1
+Requires-Dist: alembic>=1.7.1
+Requires-Dist: python-jose[cryptography]>=3.3.0
+Requires-Dist: passlib[bcrypt]>=1.7.4
+Requires-Dist: python-multipart>=0.0.5
+Requires-Dist: python-dotenv>=0.19.0
+Requires-Dist: pydantic>=1.8.2
+Requires-Dist: spacy>=3.1.0
+Requires-Dist: prophet>=1.0.1
+Requires-Dist: openai>=0.27.0
+Requires-Dist: pandas>=1.3.0
+Requires-Dist: numpy>=1.21.0
+Requires-Dist: scikit-learn>=0.24.2
+Provides-Extra: dev
+Requires-Dist: pytest>=6.2.5; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.15.1; extra == "dev"
+Requires-Dist: pytest-cov>=2.12.1; extra == "dev"
+Requires-Dist: black>=21.7b0; extra == "dev"
+Requires-Dist: isort>=5.9.3; extra == "dev"
+Requires-Dist: flake8>=3.9.2; extra == "dev"
+Requires-Dist: mypy>=0.910; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# FinanciaAI Backend
+
+A FastAPI-based backend for the FinanciaAI personal finance management platform with AI integration.
+
+## Features
+
+- User authentication with JWT tokens
+- Transaction management with categories
+- AI-powered financial insights (coming soon)
+- RESTful API design
+- PostgreSQL database
+- Comprehensive error handling
+- Environment-based configuration
+
+## Prerequisites
+
+- Python 3.8+
+- PostgreSQL
+- pip (Python package manager)
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd financiaai/backend
+```
+
+2. Create a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Set up the database:
+```bash
+# Create PostgreSQL database
+createdb financiaai
+```
+
+5. Configure environment variables:
+- Copy `.env.example` to `.env`
+- Update the values in `.env` with your configuration
+
+## Running the Application
+
+1. Activate the virtual environment (if not already activated):
+```bash
+source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+```
+
+2. Run the application:
+```bash
+python run.py
+```
+
+The API will be available at `http://localhost:8000`
+
+## API Documentation
+
+Once the application is running, you can access:
+- Interactive API documentation: `http://localhost:8000/docs`
+- Alternative API documentation: `http://localhost:8000/redoc`
+
+## API Endpoints
+
+### Authentication
+- POST `/api/v1/auth/register` - Register a new user
+- POST `/api/v1/auth/token` - Login and get access token
+- GET `/api/v1/auth/me` - Get current user information
+
+### Transactions
+- GET `/api/v1/transactions` - List transactions
+- POST `/api/v1/transactions` - Create a new transaction
+- GET `/api/v1/transactions/{id}` - Get transaction details
+- PUT `/api/v1/transactions/{id}` - Update a transaction
+- DELETE `/api/v1/transactions/{id}` - Delete a transaction
+
+### Categories
+- GET `/api/v1/transactions/categories` - List categories
+- POST `/api/v1/transactions/categories` - Create a new category
+
+## Development
+
+### Project Structure
+```
+backend/
+├── app/
+│   └── main.py          # FastAPI application instance
+├── config/
+│   ├── database.py      # Database configuration
+│   └── settings.py      # Application settings
+├── models/
+│   ├── user.py          # User and Category models
+│   └── transaction.py   # Transaction model
+├── routers/
+│   ├── auth.py          # Authentication endpoints
+│   └── transactions.py  # Transaction endpoints
+├── requirements.txt     # Project dependencies
+├── .env                 # Environment variables
+└── run.py              # Application entry point
+```
+
+### Running Tests
+```bash
+# Coming soon
+pytest
+```
+
+## Security
+
+- JWT-based authentication
+- Password hashing with bcrypt
+- Environment-based configuration
+- CORS protection
+- Input validation with Pydantic
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

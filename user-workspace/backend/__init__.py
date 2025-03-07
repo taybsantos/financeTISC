@@ -1,0 +1,3 @@
+"""
+FinanciaAI Backend Package
+"""
