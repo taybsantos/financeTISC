@@ -1,131 +1,218 @@
+from typing import Dict, List, Optional
 import spacy
-from typing import Optional, Dict, List
-import logging
-from datetime import datetime
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
+from backend.models.transaction import Transaction
+from backend.models.user import Category
 
 class TransactionCategorizer:
-    """Service for automatically categorizing financial transactions using NLP."""
-    
     def __init__(self):
-        """Initialize the categorizer with spaCy model."""
+        """Initialize the categorizer with NLP models."""
+        # Load spaCy model for text processing
         try:
             self.nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            logger.warning("Downloading spaCy model...")
+        except:
+            # Download if not available
             spacy.cli.download("en_core_web_sm")
             self.nlp = spacy.load("en_core_web_sm")
         
-        # Pre-defined category mappings
-        self.category_keywords = {
-            "food": ["restaurant", "cafe", "grocery", "food", "meal", "dinner", "lunch"],
-            "transport": ["uber", "lyft", "taxi", "bus", "train", "gas", "fuel"],
-            "shopping": ["amazon", "walmart", "target", "store", "shop"],
-            "utilities": ["electricity", "water", "gas", "internet", "phone"],
-            "entertainment": ["netflix", "spotify", "movie", "game", "subscription"],
-        }
-
-    def categorize(self, description: str) -> Optional[str]:
-        """
-        Categorize a transaction based on its description.
+        self.vectorizer = TfidfVectorizer(
+            analyzer='word',
+            ngram_range=(1, 2),
+            stop_words='english',
+            max_features=5000
+        )
         
-        Args:
-            description (str): The transaction description
-            
-        Returns:
-            Optional[str]: The predicted category or None if uncertain
-        """
-        try:
-            # Preprocess description
-            description = description.lower().strip()
-            doc = self.nlp(description)
-            
-            # Extract relevant tokens
-            tokens = [token.text for token in doc if not token.is_stop and token.is_alpha]
-            
-            # Match against category keywords
-            scores = {category: 0 for category in self.category_keywords}
-            
-            for token in tokens:
-                for category, keywords in self.category_keywords.items():
-                    if token in keywords:
-                        scores[category] += 1
-            
-            # Get category with highest score
-            max_score = max(scores.values())
-            if max_score > 0:
-                return max(scores.items(), key=lambda x: x[1])[0]
-            
+        self.classifier = MultinomialNB()
+        self.is_trained = False
+
+    def preprocess_text(self, text: str) -> str:
+        """Preprocess transaction description for better categorization."""
+        # Convert to lowercase and process with spaCy
+        doc = self.nlp(text.lower())
+        
+        # Extract relevant tokens (nouns, verbs, proper nouns)
+        tokens = [
+            token.text for token in doc
+            if (token.pos_ in ['NOUN', 'VERB', 'PROPN'] and
+                not token.is_stop and
+                token.is_alpha)
+        ]
+        
+        return ' '.join(tokens)
+
+    def train(self, transactions: List[Transaction]):
+        """Train the categorizer using historical transactions."""
+        if not transactions:
+            return
+        
+        # Prepare training data
+        descriptions = [
+            self.preprocess_text(t.description)
+            for t in transactions
+            if t.description and t.category_id
+        ]
+        
+        categories = [
+            t.category_id
+            for t in transactions
+            if t.description and t.category_id
+        ]
+        
+        if not descriptions or not categories:
+            return
+        
+        # Transform text to TF-IDF features
+        X = self.vectorizer.fit_transform(descriptions)
+        
+        # Train the classifier
+        self.classifier.fit(X, categories)
+        self.is_trained = True
+
+    def predict_category(self, description: str) -> Optional[str]:
+        """Predict category for a new transaction description."""
+        if not self.is_trained:
             return None
-            
-        except Exception as e:
-            logger.error(f"Error categorizing transaction: {str(e)}")
+        
+        # Preprocess and vectorize the description
+        processed_text = self.preprocess_text(description)
+        X = self.vectorizer.transform([processed_text])
+        
+        # Predict category
+        try:
+            category_id = self.classifier.predict(X)[0]
+            return category_id
+        except:
             return None
 
-    def train_on_historical_data(self, transactions: List[Dict]):
-        """
-        Train the categorizer using historical transaction data.
+    def get_confidence_scores(self, description: str) -> Dict[str, float]:
+        """Get confidence scores for each category."""
+        if not self.is_trained:
+            return {}
         
-        Args:
-            transactions (List[Dict]): List of historical transactions with 
-                                     confirmed categories
-        """
+        # Preprocess and vectorize the description
+        processed_text = self.preprocess_text(description)
+        X = self.vectorizer.transform([processed_text])
+        
+        # Get probability scores
         try:
-            # Update category keywords based on historical data
-            for transaction in transactions:
-                if transaction.get('category') and transaction.get('description'):
-                    category = transaction['category']
-                    description = transaction['description'].lower()
-                    
-                    # Extract significant terms
-                    doc = self.nlp(description)
-                    terms = [token.text for token in doc 
-                            if not token.is_stop and token.is_alpha]
-                    
-                    # Add terms to category keywords
-                    if category not in self.category_keywords:
-                        self.category_keywords[category] = []
-                    self.category_keywords[category].extend(terms)
-            
-            # Remove duplicates
-            self.category_keywords = {
-                category: list(set(keywords))
-                for category, keywords in self.category_keywords.items()
+            probabilities = self.classifier.predict_proba(X)[0]
+            return dict(zip(self.classifier.classes_, probabilities))
+        except:
+            return {}
+
+def setup_default_categories(db: Session, user_id: str) -> List[Category]:
+    """Set up default transaction categories for a new user."""
+    default_categories = [
+        {"name": "Housing", "description": "Rent, mortgage, utilities, maintenance"},
+        {"name": "Transportation", "description": "Car payments, fuel, public transit, maintenance"},
+        {"name": "Food", "description": "Groceries, dining out, delivery"},
+        {"name": "Healthcare", "description": "Medical expenses, insurance, medications"},
+        {"name": "Entertainment", "description": "Movies, games, hobbies, subscriptions"},
+        {"name": "Shopping", "description": "Clothing, electronics, household items"},
+        {"name": "Education", "description": "Tuition, books, courses, training"},
+        {"name": "Personal Care", "description": "Haircuts, gym, beauty products"},
+        {"name": "Insurance", "description": "Life, home, auto insurance"},
+        {"name": "Savings", "description": "Emergency fund, investments"},
+        {"name": "Debt Payments", "description": "Credit card, loan payments"},
+        {"name": "Income", "description": "Salary, investments, other income"},
+        {"name": "Gifts", "description": "Presents, donations, charity"},
+        {"name": "Travel", "description": "Flights, hotels, vacation expenses"},
+        {"name": "Business", "description": "Work-related expenses"},
+        {"name": "Other", "description": "Miscellaneous expenses"}
+    ]
+    
+    categories = []
+    for cat in default_categories:
+        category = Category(
+            name=cat["name"],
+            description=cat["description"],
+            user_id=user_id
+        )
+        db.add(category)
+        categories.append(category)
+    
+    db.commit()
+    return categories
+
+def get_or_create_categorizer(db: Session, user_id: str) -> TransactionCategorizer:
+    """Get or create a transaction categorizer for a user."""
+    # Create categorizer
+    categorizer = TransactionCategorizer()
+    
+    # Get user's transactions with categories
+    transactions = (
+        db.query(Transaction)
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.category_id.isnot(None)
+        )
+        .all()
+    )
+    
+    # Train categorizer if there are enough transactions
+    if len(transactions) >= 10:
+        categorizer.train(transactions)
+    
+    return categorizer
+
+def categorize_transaction(
+    db: Session,
+    user_id: str,
+    description: str,
+    amount: float
+) -> Dict:
+    """Categorize a transaction based on its description and amount."""
+    # Get or create categorizer
+    categorizer = get_or_create_categorizer(db, user_id)
+    
+    # Get prediction and confidence scores
+    category_id = categorizer.predict_category(description)
+    confidence_scores = categorizer.get_confidence_scores(description)
+    
+    # Get category details if predicted
+    category = None
+    if category_id:
+        category = db.query(Category).filter(
+            Category.id == category_id,
+            Category.user_id == user_id
+        ).first()
+    
+    return {
+        "category_id": category_id,
+        "category_name": category.name if category else None,
+        "confidence": confidence_scores.get(category_id, 0) if category_id else 0,
+        "alternative_categories": [
+            {
+                "category_id": cat_id,
+                "confidence": score
             }
-            
-            logger.info(f"Updated categorizer with {len(transactions)} transactions")
-            
-        except Exception as e:
-            logger.error(f"Error training categorizer: {str(e)}")
+            for cat_id, score in confidence_scores.items()
+            if cat_id != category_id
+        ]
+    }
 
-    def get_confidence_score(self, description: str, category: str) -> float:
-        """
-        Calculate confidence score for a category prediction.
-        
-        Args:
-            description (str): Transaction description
-            category (str): Predicted category
-            
-        Returns:
-            float: Confidence score between 0 and 1
-        """
-        try:
-            description = description.lower().strip()
-            doc = self.nlp(description)
-            tokens = [token.text for token in doc if not token.is_stop and token.is_alpha]
-            
-            if category not in self.category_keywords:
-                return 0.0
-            
-            matches = sum(1 for token in tokens 
-                         if token in self.category_keywords[category])
-            
-            # Calculate confidence based on keyword matches
-            confidence = matches / len(tokens) if tokens else 0.0
-            
-            return min(confidence, 1.0)
-            
-        except Exception as e:
-            logger.error(f"Error calculating confidence score: {str(e)}")
-            return 0.0
+def bulk_categorize_transactions(
+    db: Session,
+    user_id: str,
+    transactions: List[Dict]
+) -> List[Dict]:
+    """Categorize multiple transactions in bulk."""
+    categorizer = get_or_create_categorizer(db, user_id)
+    
+    results = []
+    for transaction in transactions:
+        result = categorize_transaction(
+            db,
+            user_id,
+            transaction["description"],
+            transaction["amount"]
+        )
+        results.append({
+            **transaction,
+            **result
+        })
+    
+    return results
