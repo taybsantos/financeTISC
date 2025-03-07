@@ -6,10 +6,13 @@ import logging
 
 from backend.config.settings import settings
 from backend.config.database import engine, Base
-from backend.routers import auth, transactions
+from backend.routers import auth, transactions, ai
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Initialize AI services (if needed)
+logger.info("Initializing AI services...")
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +40,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(transactions.router, prefix=settings.API_V1_STR)
+app.include_router(ai.router, prefix=settings.API_V1_STR)
 
 # Error handlers
 @app.exception_handler(HTTPException)
