@@ -1,10 +1,10 @@
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, Text
-from sqlalchemy.sql import func
-import enum
-
+from datetime import datetime
+from enum import Enum
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum as SQLEnum, Text, Boolean
+from sqlalchemy.orm import relationship
 from backend.config.database import Base
 
-class AssetType(str, enum.Enum):
+class AssetType(str, Enum):
     CASH = "cash"
     BANK_ACCOUNT = "bank_account"
     INVESTMENT = "investment"
@@ -18,107 +18,81 @@ class AssetType(str, enum.Enum):
     RETIREMENT = "retirement"
     OTHER = "other"
 
-class AssetStatus(str, enum.Enum):
+class AssetStatus(str, Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     PENDING = "pending"
     SOLD = "sold"
 
 class Asset(Base):
-    """Model for tracking various types of assets."""
-    
     __tablename__ = "assets"
 
-    id = Column(String, primary_key=True)
+    id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    type = Column(Enum(AssetType), nullable=False)
+    type = Column(SQLEnum(AssetType), nullable=False, index=True)
     value = Column(Float, nullable=False)
-    currency = Column(String, default="USD")
-    status = Column(Enum(AssetStatus), default=AssetStatus.ACTIVE)
-    
-    # Asset details
+    currency = Column(String)
+    status = Column(SQLEnum(AssetStatus), default=AssetStatus.ACTIVE)
     description = Column(Text)
+    
+    # Acquisition details
     acquisition_date = Column(DateTime)
     acquisition_value = Column(Float)
     current_value = Column(Float)
     last_valuation_date = Column(DateTime)
     
-    # Location/identification
-    institution = Column(String)  # Bank, broker, etc.
+    # Financial details
+    institution = Column(String)
     account_number = Column(String)
-    location = Column(String)  # Physical location for real estate, etc.
-    
-    # Investment specific
-    quantity = Column(Float)  # Number of shares, units, etc.
-    ticker_symbol = Column(String)  # For stocks, ETFs, etc.
-    interest_rate = Column(Float)  # For interest-bearing assets
-    maturity_date = Column(DateTime)  # For bonds, CDs, etc.
+    location = Column(String)
+    quantity = Column(Float)
+    ticker_symbol = Column(String)
+    interest_rate = Column(Float)
+    maturity_date = Column(DateTime)
     
     # Real estate specific
-    property_type = Column(String)  # Residential, Commercial, etc.
+    property_type = Column(String)
     address = Column(Text)
     square_footage = Column(Float)
     
-    # Ownership and tracking
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    
-    # Risk assessment
-    risk_level = Column(String)  # Low, Medium, High
-    liquidity_level = Column(String)  # High, Medium, Low
-    
-    # Performance tracking
+    # Investment specific
+    risk_level = Column(String)
+    liquidity_level = Column(String)
     annual_return = Column(Float)
     total_return = Column(Float)
     unrealized_gain_loss = Column(Float)
     
-    # Notes and tags
+    # Metadata
     notes = Column(Text)
-    tags = Column(String)  # Comma-separated tags
+    tags = Column(String)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    def calculate_current_value(self) -> float:
+    # Relationships
+    user = relationship("User", back_populates="assets")
+
+    def __repr__(self):
+        return f"<Asset {self.name}: {self.type} - {self.current_value}>"
+
+    def calculate_current_value(self):
         """Calculate the current value of the asset."""
-        if self.type in [AssetType.STOCK, AssetType.ETF]:
-            # Would integrate with market data API
-            return self.quantity * self.current_value
-        elif self.type == AssetType.REAL_ESTATE:
-            # Could integrate with real estate valuation API
+        if self.current_value is not None:
             return self.current_value
         return self.value
 
-    def calculate_return(self) -> float:
+    def calculate_return(self):
         """Calculate the return on investment."""
-        if self.acquisition_value and self.acquisition_value > 0:
-            current = self.calculate_current_value()
-            return ((current - self.acquisition_value) / self.acquisition_value) * 100
+        if self.acquisition_value and self.current_value:
+            return ((self.current_value - self.acquisition_value) / self.acquisition_value) * 100
         return 0
 
-    def calculate_unrealized_gain_loss(self) -> float:
-        """Calculate unrealized gain/loss."""
-        if self.acquisition_value:
-            return self.calculate_current_value() - self.acquisition_value
-        return 0
+    @property
+    def tags_list(self):
+        """Return tags as a list."""
+        return [tag.strip() for tag in self.tags.split(",")] if self.tags else []
 
-    def to_dict(self) -> dict:
-        """Convert asset to dictionary."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "type": self.type,
-            "value": self.value,
-            "currency": self.currency,
-            "status": self.status,
-            "description": self.description,
-            "acquisition_date": self.acquisition_date.isoformat() if self.acquisition_date else None,
-            "current_value": self.current_value,
-            "last_valuation_date": self.last_valuation_date.isoformat() if self.last_valuation_date else None,
-            "institution": self.institution,
-            "risk_level": self.risk_level,
-            "liquidity_level": self.liquidity_level,
-            "annual_return": self.annual_return,
-            "total_return": self.total_return,
-            "unrealized_gain_loss": self.unrealized_gain_loss,
-            "notes": self.notes,
-            "tags": self.tags
-        }
+    @tags_list.setter
+    def tags_list(self, tags):
+        """Set tags from a list."""
+        self.tags = ",".join(tags) if tags else None

@@ -1,13 +1,13 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime
-from sqlalchemy.orm import relationship
 from datetime import datetime
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from backend.config.database import Base
-import uuid
 
 class User(Base):
+    """User model."""
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     full_name = Column(String)
@@ -15,21 +15,24 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
-    transactions = relationship("Transaction", back_populates="user")
-    categories = relationship("Category", back_populates="user")
-    
+    categories = relationship("Category", back_populates="user", cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
+    assets = relationship("Asset", back_populates="user", cascade="all, delete-orphan")
+    debts = relationship("Debt", back_populates="user", cascade="all, delete-orphan")
+
     def __repr__(self):
         return f"<User {self.email}>"
 
 class Category(Base):
+    """Category model for transactions."""
     __tablename__ = "categories"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=False)
     description = Column(String)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -39,6 +42,3 @@ class Category(Base):
 
     def __repr__(self):
         return f"<Category {self.name}>"
-
-# Add missing imports
-from sqlalchemy import ForeignKey

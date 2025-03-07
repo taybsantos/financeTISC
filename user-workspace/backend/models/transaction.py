@@ -1,16 +1,15 @@
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum
-from sqlalchemy.orm import relationship
 from datetime import datetime
+from enum import Enum
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy.orm import relationship
 from backend.config.database import Base
-import enum
-import uuid
 
-class TransactionType(enum.Enum):
+class TransactionType(str, Enum):
     INCOME = "income"
     EXPENSE = "expense"
     TRANSFER = "transfer"
 
-class TransactionStatus(enum.Enum):
+class TransactionStatus(str, Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
@@ -19,42 +18,31 @@ class TransactionStatus(enum.Enum):
 class Transaction(Base):
     __tablename__ = "transactions"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String, primary_key=True, index=True)
     amount = Column(Float, nullable=False)
     description = Column(String)
-    type = Column(Enum(TransactionType), nullable=False)
-    status = Column(Enum(TransactionStatus), default=TransactionStatus.PENDING)
-    
-    # Foreign keys
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    category_id = Column(String, ForeignKey("categories.id"))
-    
-    # Metadata
-    transaction_date = Column(DateTime, nullable=False)
+    type = Column(SQLEnum(TransactionType), nullable=False)
+    status = Column(SQLEnum(TransactionStatus), default=TransactionStatus.PENDING)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    category_id = Column(String, ForeignKey("categories.id", ondelete="SET NULL"), index=True)
+    transaction_date = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Optional fields for transfers
     source_account = Column(String)
     destination_account = Column(String)
-    
-    # Additional metadata
-    tags = Column(String)  # Stored as comma-separated values
+    tags = Column(String)
     notes = Column(String)
-    
-    # Relationships
+
     user = relationship("User", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
 
     def __repr__(self):
-        return f"<Transaction {self.id}: {self.amount} - {self.type.value}>"
+        return f"<Transaction {self.id}: {self.amount} - {self.type}>"
 
     @property
     def tags_list(self):
-        """Convert tags string to list"""
-        return [tag.strip() for tag in self.tags.split(',')] if self.tags else []
+        return [tag.strip() for tag in self.tags.split(",")] if self.tags else []
 
     @tags_list.setter
     def tags_list(self, tags):
-        """Convert list of tags to string"""
-        self.tags = ','.join(tags) if tags else None
+        self.tags = ",".join(tags) if tags else None
